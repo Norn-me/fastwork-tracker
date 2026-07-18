@@ -1,0 +1,5 @@
+# Keep the business plan out of the public Pages repo
+*.pptx
+
+# Local tooling
+.claude/

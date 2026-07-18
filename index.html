@@ -1,0 +1,1199 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fastwork Launch Tracker</title>
+<meta name="description" content="Track every step of your Fastwork launch plan. Offline-first PWA with GitHub Gist sync.">
+<meta name="theme-color" content="#14161d">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Fastwork">
+<script>
+/* Apply saved theme before first paint to avoid a flash. */
+try {
+  if (localStorage.getItem('fw_theme_v1') === 'light') {
+    document.documentElement.setAttribute('data-theme', 'light');
+    document.querySelector('meta[name="theme-color"]').setAttribute('content', '#f6f5f2');
+  }
+} catch (e) {}
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
+<script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
+<style>
+/* ============================================================
+   Fastwork Launch Tracker — token-driven, dark-first.
+   Architecture mirrors Rapid Notes: single file, no build,
+   CSS custom properties for every design decision.
+   ============================================================ */
+:root {
+  color-scheme: dark;
+
+  /* surfaces */
+  --bg: #14161d;
+  --bg-raised: #1c1f29;
+  --bg-inset: #101218;
+  --line: #2c303d;
+  --line-soft: #23262f;
+
+  /* ink */
+  --ink: #e6e4df;
+  --ink-mid: #a3a4ab;
+  --ink-dim: #6d6f78;
+
+  /* brand */
+  --accent: #fc8747;
+  --accent-strong: #ed6d2e;
+  --accent-soft: rgba(252, 135, 71, 0.14);
+  --accent-fg: #1a120b;
+
+  --green: #4cd36f;
+  --green-soft: rgba(76, 211, 111, 0.13);
+  --gold: #f5c04b;
+  --gold-soft: rgba(245, 192, 75, 0.12);
+  --red: #f4626e;
+
+  /* type */
+  --font: 'Inter', -apple-system, 'Segoe UI', system-ui, sans-serif;
+
+  /* rhythm */
+  --space-xs: 4px; --space-sm: 8px; --space-md: 16px;
+  --space-lg: 24px; --space-xl: 32px;
+  --radius-sm: 10px; --radius-md: 14px; --radius-lg: 20px;
+
+  --shadow-1: 0 2px 8px rgba(0,0,0,0.25);
+  --shadow-2: 0 8px 24px rgba(0,0,0,0.32);
+
+  --bar-h: 58px;
+  --dock-h: 66px;
+  --sat: env(safe-area-inset-top, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+}
+
+html[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f6f5f2;
+  --bg-raised: #ffffff;
+  --bg-inset: #edecec;
+  --line: #ddd9d2;
+  --line-soft: #e7e4de;
+  --ink: #23252c;
+  --ink-mid: #5d5f68;
+  --ink-dim: #94959c;
+  --accent-soft: rgba(237, 109, 46, 0.12);
+  --green: #17a94c;
+  --green-soft: rgba(23, 169, 76, 0.11);
+  --gold: #c78d10;
+  --gold-soft: rgba(199, 141, 16, 0.12);
+  --red: #d5333f;
+  --shadow-1: 0 2px 8px rgba(40,35,25,0.09);
+  --shadow-2: 0 8px 24px rgba(40,35,25,0.13);
+}
+
+* { box-sizing: border-box; margin: 0; }
+html { height: 100%; }
+body {
+  height: 100%;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+button { font-family: inherit; cursor: pointer; }
+input, select { font-family: inherit; }
+
+/* ---------- app frame ---------- */
+#app {
+  max-width: 720px;
+  margin: 0 auto;
+  min-height: 100%;
+  padding: calc(var(--bar-h) + var(--sat) + 12px) 16px calc(var(--dock-h) + var(--sab) + 24px);
+}
+
+header.bar {
+  position: fixed; inset: 0 0 auto 0; z-index: 30;
+  height: calc(var(--bar-h) + var(--sat));
+  padding: var(--sat) 16px 0;
+  display: flex; align-items: center; gap: 10px;
+  background: color-mix(in srgb, var(--bg) 90%, transparent);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--line-soft);
+}
+.bar-inner {
+  max-width: 720px; width: 100%; margin: 0 auto;
+  display: flex; align-items: center; gap: 10px;
+}
+.bar-logo { width: 28px; height: 28px; border-radius: 8px; }
+.bar-title { font-weight: 700; font-size: 16px; letter-spacing: -0.01em; flex: 1; }
+.bar-title small { display: block; font-size: 11px; font-weight: 500; color: var(--ink-dim); line-height: 1.1; }
+
+.sync-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; font-weight: 600;
+  padding: 5px 10px; border-radius: 999px;
+  background: var(--bg-raised); border: 1px solid var(--line);
+  color: var(--ink-mid); white-space: nowrap;
+  transition: all .2s ease-out;
+}
+.sync-chip.ok    { color: var(--green); border-color: color-mix(in srgb, var(--green) 35%, transparent); background: var(--green-soft); }
+.sync-chip.busy  { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 35%, transparent); background: var(--accent-soft); }
+.sync-chip.err   { color: var(--red); }
+.sync-chip .iconify { font-size: 14px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.sync-chip.busy .iconify { animation: spin 1s linear infinite; }
+
+/* ---------- bottom dock ---------- */
+nav.dock {
+  position: fixed; inset: auto 0 0 0; z-index: 30;
+  height: calc(var(--dock-h) + var(--sab));
+  padding: 6px 16px var(--sab);
+  background: color-mix(in srgb, var(--bg) 92%, transparent);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid var(--line-soft);
+}
+.dock-inner { max-width: 420px; margin: 0 auto; display: flex; height: var(--dock-h); }
+.dock-btn {
+  flex: 1; border: 0; background: none; color: var(--ink-dim);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  font-size: 11px; font-weight: 600; border-radius: var(--radius-md);
+  transition: color .15s ease-out;
+}
+.dock-btn .iconify { font-size: 22px; }
+.dock-btn.active { color: var(--accent); }
+
+/* ---------- cards & common ---------- */
+.card {
+  background: var(--bg-raised);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-1);
+  margin-bottom: var(--space-md);
+  overflow: hidden;
+}
+.card-pad { padding: var(--space-md); }
+
+h2.section { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-dim); margin: var(--space-lg) 2px var(--space-sm); }
+
+.chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 11px; font-weight: 600; padding: 2px 8px;
+  border-radius: 999px; background: var(--bg-inset);
+  border: 1px solid var(--line-soft); color: var(--ink-mid);
+  white-space: nowrap;
+}
+.chip.warn { color: var(--gold); background: var(--gold-soft); border-color: transparent; }
+
+/* ---------- hero ---------- */
+.hero { display: flex; gap: var(--space-md); align-items: center; padding: var(--space-md); }
+.ring-wrap { position: relative; width: 92px; height: 92px; flex-shrink: 0; }
+.ring-wrap svg { transform: rotate(-90deg); }
+.ring-track { stroke: var(--bg-inset); }
+.ring-fill { stroke: var(--accent); stroke-linecap: round; transition: stroke-dashoffset .5s ease-out; }
+.ring-label {
+  position: absolute; inset: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; line-height: 1.1;
+}
+.ring-label b { font-size: 22px; font-weight: 800; letter-spacing: -0.02em; }
+.ring-label span { font-size: 10px; color: var(--ink-dim); font-weight: 600; }
+.hero-info { flex: 1; min-width: 0; }
+.hero-info h1 { font-size: 17px; font-weight: 700; letter-spacing: -0.01em; margin-bottom: 2px; }
+.hero-info p { font-size: 13px; color: var(--ink-mid); }
+.up-next {
+  margin-top: 8px; font-size: 12.5px; display: flex; align-items: flex-start; gap: 6px;
+  color: var(--accent); font-weight: 600;
+}
+.up-next .iconify { flex-shrink: 0; margin-top: 2px; }
+
+.positioning {
+  padding: var(--space-md);
+  background: linear-gradient(135deg, var(--accent-soft), transparent 70%);
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--space-md);
+  font-size: 13.5px; color: var(--ink-mid);
+}
+.positioning b { color: var(--ink); display: block; margin-bottom: 4px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.07em; }
+.positioning em { color: var(--ink); font-style: italic; }
+
+/* ---------- phases ---------- */
+.phase-head {
+  width: 100%; border: 0; background: none; color: inherit; text-align: left;
+  display: flex; align-items: center; gap: 12px;
+  padding: var(--space-md);
+}
+.phase-num {
+  width: 40px; height: 40px; border-radius: 12px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 800; font-size: 15px;
+  background: var(--accent-soft); color: var(--accent);
+}
+.phase-num.done { background: var(--green-soft); color: var(--green); }
+.phase-meta { flex: 1; min-width: 0; }
+.phase-meta h3 { font-size: 15px; font-weight: 700; letter-spacing: -0.01em; }
+.phase-meta p { font-size: 12.5px; color: var(--ink-dim); margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.phase-count { font-size: 12px; font-weight: 700; color: var(--ink-dim); flex-shrink: 0; }
+.phase-chev { color: var(--ink-dim); transition: transform .2s ease-out; flex-shrink: 0; }
+.phase.open .phase-chev { transform: rotate(180deg); }
+
+.phase-bar { height: 4px; background: var(--bg-inset); margin: 0 var(--space-md); border-radius: 2px; overflow: hidden; }
+.phase-bar i { display: block; height: 100%; background: var(--accent); border-radius: 2px; transition: width .4s ease-out; }
+.phase-bar i.full { background: var(--green); }
+
+.phase-body { display: none; padding: 10px var(--space-md) var(--space-md); }
+.phase.open .phase-body { display: block; }
+.phase-note {
+  font-size: 12.5px; color: var(--gold); background: var(--gold-soft);
+  padding: 8px 12px; border-radius: var(--radius-sm); margin-bottom: 10px;
+  display: flex; gap: 8px; align-items: flex-start;
+}
+.phase-note .iconify { flex-shrink: 0; margin-top: 2px; }
+
+/* ---------- tasks ---------- */
+.task { padding: 8px 0; }
+.task + .task { border-top: 1px solid var(--line-soft); }
+.task-row { display: flex; align-items: flex-start; gap: 10px; }
+.task-main { flex: 1; min-width: 0; cursor: pointer; }
+.task-title { font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.task-desc { font-size: 12.5px; color: var(--ink-mid); margin-top: 2px; }
+.task.done .task-title, .sub.done .sub-label { color: var(--ink-dim); text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--ink-dim) 55%, transparent); }
+.task.done .task-desc { color: var(--ink-dim); }
+
+.check {
+  appearance: none; -webkit-appearance: none;
+  width: 22px; height: 22px; flex-shrink: 0; margin-top: 1px;
+  border: 2px solid var(--line); border-radius: 7px;
+  background: var(--bg-inset); cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: all .15s ease-out; position: relative;
+}
+.check:checked { background: var(--green); border-color: var(--green); }
+.check:checked::after {
+  content: ''; width: 11px; height: 6px;
+  border-left: 2.5px solid var(--bg); border-bottom: 2.5px solid var(--bg);
+  transform: rotate(-45deg) translate(1px, -1px);
+}
+.check.half { border-color: var(--accent); }
+.check.half::after {
+  content: ''; width: 10px; height: 10px; border-radius: 3px;
+  background: var(--accent);
+}
+
+.subs { margin: 8px 0 2px 32px; display: flex; flex-direction: column; gap: 7px; }
+.sub { display: flex; align-items: flex-start; gap: 9px; }
+.sub .check { width: 19px; height: 19px; border-radius: 6px; }
+.sub .check:checked::after { width: 9px; height: 5px; }
+.sub-label { font-size: 13px; color: var(--ink); cursor: pointer; user-select: none; padding-top: 0; }
+
+/* ---------- gigs view ---------- */
+.gig-tag { font-size: 11px; font-weight: 800; letter-spacing: 0.1em; color: var(--accent); text-transform: uppercase; }
+.gig-title { font-size: 16px; font-weight: 700; letter-spacing: -0.01em; margin: 2px 0 6px; }
+.gig-desc { font-size: 13px; color: var(--ink-mid); }
+.gig-sub { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: var(--ink-dim); margin: 14px 0 6px; }
+.gig-list { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.gig-list li { font-size: 13px; color: var(--ink-mid); display: flex; gap: 8px; align-items: flex-start; }
+.gig-list li .iconify { color: var(--accent); flex-shrink: 0; margin-top: 3px; font-size: 13px; }
+
+.tiers { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 6px; }
+.tier {
+  background: var(--bg-inset); border: 1px solid var(--line-soft);
+  border-radius: var(--radius-md); padding: 10px;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.tier.mid { border-color: color-mix(in srgb, var(--accent) 40%, transparent); }
+.tier h5 { font-size: 10px; font-weight: 800; letter-spacing: 0.09em; color: var(--ink-dim); }
+.tier.mid h5 { color: var(--accent); }
+.tier .price { font-size: 17px; font-weight: 800; letter-spacing: -0.02em; }
+.tier .del { font-size: 11px; color: var(--ink-dim); font-weight: 600; }
+.tier ul { list-style: none; padding: 0; margin-top: 2px; display: flex; flex-direction: column; gap: 2px; }
+.tier ul li { font-size: 11.5px; color: var(--ink-mid); line-height: 1.35; }
+
+.ladder-step { display: flex; gap: 12px; padding: 10px 0; }
+.ladder-step + .ladder-step { border-top: 1px solid var(--line-soft); }
+.ladder-n {
+  width: 30px; height: 30px; border-radius: 999px; flex-shrink: 0;
+  background: var(--accent-soft); color: var(--accent);
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 800; font-size: 13px;
+}
+.ladder-step b { font-size: 13.5px; display: block; }
+.ladder-step p { font-size: 12.5px; color: var(--ink-mid); }
+
+/* ---------- settings ---------- */
+.set-row { display: flex; align-items: center; gap: 12px; padding: 14px var(--space-md); }
+.set-row + .set-row { border-top: 1px solid var(--line-soft); }
+.set-row .iconify { font-size: 20px; color: var(--ink-mid); flex-shrink: 0; }
+.set-main { flex: 1; min-width: 0; }
+.set-main b { font-size: 14px; font-weight: 600; display: block; }
+.set-main span { font-size: 12px; color: var(--ink-dim); }
+
+.btn {
+  border: 1px solid var(--line); background: var(--bg-inset); color: var(--ink);
+  font-size: 13px; font-weight: 600; padding: 8px 14px;
+  border-radius: var(--radius-sm); transition: all .15s ease-out;
+}
+.btn:hover { border-color: var(--ink-dim); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+.btn.danger { color: var(--red); border-color: color-mix(in srgb, var(--red) 40%, transparent); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.field { width: 100%; margin-top: 8px; }
+.field input {
+  width: 100%; background: var(--bg-inset); border: 1px solid var(--line);
+  color: var(--ink); border-radius: var(--radius-sm);
+  padding: 9px 12px; font-size: 13px;
+}
+.field input:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; }
+.hint { font-size: 12px; color: var(--ink-dim); margin-top: 8px; line-height: 1.5; }
+.hint a { color: var(--accent); }
+.sync-status-line { font-size: 12.5px; margin-top: 10px; color: var(--ink-mid); display: flex; align-items: center; gap: 6px; }
+
+/* toggle switch */
+.switch { position: relative; width: 42px; height: 24px; flex-shrink: 0; }
+.switch input { opacity: 0; width: 100%; height: 100%; position: absolute; margin: 0; cursor: pointer; z-index: 1; }
+.switch i {
+  position: absolute; inset: 0; border-radius: 999px;
+  background: var(--bg-inset); border: 1px solid var(--line);
+  transition: background .15s ease-out;
+}
+.switch i::after {
+  content: ''; position: absolute; top: 2px; left: 2px;
+  width: 18px; height: 18px; border-radius: 999px;
+  background: var(--ink-dim); transition: all .15s ease-out;
+}
+.switch input:checked + i { background: var(--accent); border-color: var(--accent); }
+.switch input:checked + i::after { left: 20px; background: #fff; }
+
+/* ---------- toast ---------- */
+#toast {
+  position: fixed; left: 50%; bottom: calc(var(--dock-h) + var(--sab) + 16px);
+  transform: translateX(-50%) translateY(12px);
+  background: var(--bg-raised); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 999px;
+  box-shadow: var(--shadow-2);
+  padding: 9px 18px; font-size: 13px; font-weight: 600;
+  opacity: 0; pointer-events: none; transition: all .25s ease-out;
+  z-index: 50; white-space: nowrap; max-width: 90vw; overflow: hidden; text-overflow: ellipsis;
+}
+#toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+.view { display: none; }
+.view.active { display: block; animation: fadein .25s ease-out; }
+@keyframes fadein { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; } }
+
+@media (max-width: 500px) {
+  .tiers { grid-template-columns: 1fr; }
+  .tier {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-areas: "name price" "del price" "feats feats";
+    align-items: center;
+    column-gap: 10px;
+  }
+  .tier h5 { grid-area: name; }
+  .tier .price { grid-area: price; }
+  .tier .del { grid-area: del; }
+  .tier ul { grid-area: feats; margin-top: 6px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; animation: none !important; }
+}
+@media (min-width: 640px) {
+  body { font-size: 15.5px; }
+  .tiers { gap: 10px; }
+}
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <div class="bar-inner">
+    <img class="bar-logo" src="icons/icon-192.png" alt="">
+    <div class="bar-title">Fastwork Launch<small>zero experience → first 5-star reviews</small></div>
+    <div class="sync-chip" id="syncChip"><span class="iconify" data-icon="solar:cloud-cross-linear"></span><span id="syncChipText">Local</span></div>
+  </div>
+</header>
+
+<div id="app">
+  <!-- ================= PLAN VIEW ================= -->
+  <div class="view active" id="view-plan">
+    <div class="card hero">
+      <div class="ring-wrap">
+        <svg width="92" height="92" viewBox="0 0 92 92">
+          <circle class="ring-track" cx="46" cy="46" r="40" fill="none" stroke-width="8"/>
+          <circle class="ring-fill" id="ringFill" cx="46" cy="46" r="40" fill="none" stroke-width="8"
+                  stroke-dasharray="251.3" stroke-dashoffset="251.3"/>
+        </svg>
+        <div class="ring-label"><b id="ringPct">0%</b><span id="ringSteps">0 / 0</span></div>
+      </div>
+      <div class="hero-info">
+        <h1>Launch progress</h1>
+        <p id="heroLine">Every step from the plan, in order.</p>
+        <div class="up-next" id="upNext"></div>
+      </div>
+    </div>
+
+    <div class="positioning">
+      <b>Your positioning</b>
+      Not “I do graphic design” — <em>“I make custom illustrated brand characters and turn them into scroll-stopping short-form video content.”</em>
+    </div>
+
+    <div id="phases"></div>
+  </div>
+
+  <!-- ================= GIGS VIEW ================= -->
+  <div class="view" id="view-gigs">
+    <h2 class="section">Gig listings — reference specs</h2>
+    <div id="gigs"></div>
+
+    <h2 class="section">Pricing ladder</h2>
+    <div class="card card-pad">
+      <div class="ladder-step"><div class="ladder-n">1</div><div><b>Orders 1–8</b><p>Price at the platform minimum or just above. Goal: your first reviews, not profit.</p></div></div>
+      <div class="ladder-step"><div class="ladder-n">2</div><div><b>~10 orders at 4.8★+</b><p>Raise prices 20–30%. Your rating and history now do the selling for you.</p></div></div>
+      <div class="ladder-step"><div class="ladder-n">3</div><div><b>Every 10–15 orders</b><p>Repeat the increase. Push into higher-value work: SEO, web builds, branding systems.</p></div></div>
+    </div>
+
+    <div class="positioning" style="margin-top:16px">
+      <b>Bundle to raise order value</b>
+      Three separate cheap gigs lose to one package. <em>“Mascot + 3 LINE stickers + logo”</em> as a single bundle beats selling each piece on its own — higher order value, one happy client, one strong review.
+    </div>
+  </div>
+
+  <!-- ================= SETTINGS VIEW ================= -->
+  <div class="view" id="view-settings">
+    <h2 class="section">Sync</h2>
+    <div class="card card-pad">
+      <b style="font-size:14px">GitHub Gist sync</b>
+      <p class="hint" style="margin-top:4px">Progress is stored in a <b>private Gist</b> on your GitHub account and auto-syncs whenever this device is online. Set the same token on your PC and phone.</p>
+      <div class="field"><input type="password" id="tokenInput" placeholder="GitHub token (needs only the “gist” scope)" autocomplete="off"></div>
+      <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap">
+        <button class="btn primary" id="btnSaveToken">Save token</button>
+        <button class="btn" id="btnSyncNow">Sync now</button>
+        <button class="btn danger" id="btnClearToken">Disconnect</button>
+      </div>
+      <div class="sync-status-line" id="syncStatusLine"></div>
+      <p class="hint">Create a token at <a href="https://github.com/settings/tokens/new?scopes=gist&description=Fastwork%20Tracker" target="_blank" rel="noopener">github.com/settings/tokens</a> — classic token, tick only <b>gist</b>. The token never leaves this device except to call the GitHub API.</p>
+    </div>
+
+    <h2 class="section">Appearance</h2>
+    <div class="card">
+      <div class="set-row">
+        <span class="iconify" data-icon="solar:sun-linear"></span>
+        <div class="set-main"><b>Light theme</b><span>Dark is the default</span></div>
+        <label class="switch"><input type="checkbox" id="themeToggle"><i></i></label>
+      </div>
+    </div>
+
+    <h2 class="section">Data</h2>
+    <div class="card">
+      <div class="set-row">
+        <span class="iconify" data-icon="solar:download-linear"></span>
+        <div class="set-main"><b>Export backup</b><span>Download progress as JSON</span></div>
+        <button class="btn" id="btnExport">Export</button>
+      </div>
+      <div class="set-row">
+        <span class="iconify" data-icon="solar:upload-linear"></span>
+        <div class="set-main"><b>Import backup</b><span>Merges with current progress</span></div>
+        <button class="btn" id="btnImport">Import</button>
+        <input type="file" id="importFile" accept="application/json" hidden>
+      </div>
+      <div class="set-row">
+        <span class="iconify" data-icon="solar:restart-linear"></span>
+        <div class="set-main"><b>Reset progress</b><span>Unchecks everything, everywhere</span></div>
+        <button class="btn danger" id="btnReset">Reset</button>
+      </div>
+    </div>
+
+    <p class="hint" style="text-align:center; margin-top:20px">
+      Fastwork Launch Tracker · offline-first PWA<br>
+      Install: browser menu → “Add to Home screen” / “Install app”
+    </p>
+  </div>
+</div>
+
+<nav class="dock">
+  <div class="dock-inner">
+    <button class="dock-btn active" data-view="plan"><span class="iconify" data-icon="solar:checklist-minimalistic-linear"></span>Plan</button>
+    <button class="dock-btn" data-view="gigs"><span class="iconify" data-icon="solar:tag-price-linear"></span>Gigs</button>
+    <button class="dock-btn" data-view="settings"><span class="iconify" data-icon="solar:settings-linear"></span>Settings</button>
+  </div>
+</nav>
+
+<div id="toast"></div>
+
+<script>
+'use strict';
+/* ============================================================
+   Fastwork Launch Tracker
+   Single-file, no-build (Rapid Notes architecture).
+   localStorage for state · GitHub Gist for cross-device sync.
+   ============================================================ */
+
+/* ---------------- plan data (extrapolated from the deck) ---------------- */
+const PLAN = [
+  {
+    id: 'p0', num: '0', title: 'Build proof before you list',
+    tagline: 'Fabricate realistic briefs, execute them like client work',
+    note: '5 strong pieces beat 20 mediocre ones. Treat each fake brief like a paying client sent it.',
+    items: [
+      { id: 'p0a', title: 'Anime-style mascot + mini brand kit', dur: '2–3 days',
+        desc: 'For a fictional Thai brand — coffee shop, skincare, or TikTok Shop seller.',
+        subs: [
+          ['p0a1', 'Pick the fictional brand & write the fake client brief'],
+          ['p0a2', 'Concept sketches (2–3 directions)'],
+          ['p0a3', 'Final colored character sheet'],
+          ['p0a4', 'Logo + color palette'],
+          ['p0a5', '1 social media template using the mascot'],
+        ] },
+      { id: 'p0b', title: 'LINE sticker set (8–16 stickers)', dur: '2–3 days',
+        desc: 'Huge, evergreen Thai demand with low competition on quality. Reuse your mascot.',
+        subs: [
+          ['p0b1', 'List expressions / phrases (Thai + English)'],
+          ['p0b2', 'Sketch all stickers'],
+          ['p0b3', 'Finalize & color'],
+          ['p0b4', 'Export to LINE Creators Market specs (main + tab images)'],
+        ] },
+      { id: 'p0c', title: 'Short-form video, AI-assisted', dur: '1–2 days',
+        desc: '15–30s edit — treat it like a real TikTok Shop ad.',
+        subs: [
+          ['p0c1', 'Pick a product & write the hook'],
+          ['p0c2', 'Rough cut with pacing (15–30s)'],
+          ['p0c3', 'AI auto-captions'],
+          ['p0c4', 'AI b-roll + upscaling'],
+          ['p0c5', 'Final polish & export'],
+        ] },
+      { id: 'p0d', title: 'One simple motion graphic', dur: '1 day',
+        desc: 'Animate a logo or character you drew yourself — the combo almost nobody offers.',
+        subs: [
+          ['p0d1', 'Choose your own logo/character to animate'],
+          ['p0d2', 'Animate it'],
+          ['p0d3', 'Export a loop-ready clip'],
+        ] },
+      { id: 'p0e', title: 'UX/UI concept — hold back for later', dur: '1–2 days',
+        desc: 'Redesign one screen of a real Thai app you find ugly. Your weakest entry point with zero experience — publish it only once you have reviews.',
+        subs: [
+          ['p0e1', 'Pick an ugly screen from a real Thai app'],
+          ['p0e2', 'Redesign it'],
+          ['p0e3', 'Write a before/after mini case study'],
+        ] },
+    ],
+  },
+  {
+    id: 'p1', num: '1', title: 'List your 3 gigs',
+    tagline: 'Mascot design · LINE stickers · AI-assisted video',
+    note: 'Write titles around outcomes, not skills — “Custom anime mascot that makes your brand memorable”, not “Anime style drawing service”. Full tier specs are in the Gigs tab.',
+    items: [
+      { id: 'p1a', title: 'Gig 1 — Custom anime-style brand mascot', dur: '฿900 / 2,000 / 4,000',
+        desc: 'Hand-drawn character, concept sketch → clean character sheet.',
+        subs: [
+          ['p1a1', 'Write outcome-focused title'],
+          ['p1a2', 'Description + “what the buyer provides”'],
+          ['p1a3', 'Configure Basic / Standard / Premium tiers'],
+          ['p1a4', 'Attach portfolio pieces from Phase 0'],
+          ['p1a5', 'Publish the gig'],
+        ] },
+      { id: 'p1b', title: 'Gig 2 — Anime-style LINE sticker set', dur: '฿1,500 / 2,900 / 4,800',
+        desc: '8–16 original stickers, formatted for LINE Creators Market.',
+        subs: [
+          ['p1b1', 'Write outcome-focused title'],
+          ['p1b2', 'Description + “what the buyer provides”'],
+          ['p1b3', 'Configure Basic / Standard / Premium tiers'],
+          ['p1b4', 'Attach portfolio pieces from Phase 0'],
+          ['p1b5', 'Publish the gig'],
+        ] },
+      { id: 'p1c', title: 'Gig 3 — Scroll-stopping TikTok Shop videos', dur: '฿650 / 1,500 / 3,800',
+        desc: 'AI-assisted 15–60s edits: hooks, pacing, trending formats.',
+        subs: [
+          ['p1c1', 'Write outcome-focused title'],
+          ['p1c2', 'Description + “what the buyer provides”'],
+          ['p1c3', 'Configure Basic / Standard / Premium tiers'],
+          ['p1c4', 'Attach portfolio pieces from Phase 0'],
+          ['p1c5', 'Publish the gig'],
+        ] },
+    ],
+  },
+  {
+    id: 'p2', num: '2', title: 'Pricing to get first reviews',
+    tagline: 'Early on you’re buying reviews, not profit',
+    items: [
+      { id: 'p2a', title: 'Price all gigs at platform minimum', dur: 'orders 1–8',
+        desc: 'Or just above it. Goal: your first reviews and a track record.' },
+      { id: 'p2b', title: 'Reach ~10 orders with a 4.8★+ average', dur: 'milestone',
+        desc: 'Your rating and history start doing the selling for you.' },
+      { id: 'p2c', title: 'First price raise: +20–30%', dur: 'after milestone',
+        desc: 'Across all gigs once the 10-order / 4.8★ bar is hit.' },
+      { id: 'p2d', title: 'Repeat the raise every 10–15 orders', dur: 'ongoing',
+        desc: 'Push into higher-value work: SEO, web builds, branding systems.' },
+      { id: 'p2e', title: 'Create a bundle offer', dur: 'order-value',
+        desc: '“Mascot + 3 LINE stickers + logo” as one package — higher order value, one strong review.' },
+    ],
+  },
+  {
+    id: 'p3', num: '3', title: 'Standing out mechanically',
+    tagline: 'Small consistent behaviors that beat a bigger portfolio',
+    note: 'These are habits — check one off once it’s genuinely part of how you operate.',
+    items: [
+      { id: 'p3a', title: 'Respond within the hour', dur: 'habit',
+        desc: 'During your active hours — early on, speed wins jobs more than portfolio does.' },
+      { id: 'p3b', title: 'Over-deliver on the first 10 orders', dur: 'habit',
+        desc: 'An extra revision or small bonus asset turns into detailed 5-star reviews.' },
+      { id: 'p3c', title: 'Show your process, not just results', dur: 'habit',
+        desc: 'A 20-second screen recording of you sketching or editing builds trust AI-only competitors can’t fake.' },
+      { id: 'p3d', title: 'Go for Specialist status', dur: 'when eligible',
+        desc: 'Boosts visibility and signals vetted quality to buyers.' },
+      { id: 'p3e', title: 'Keep every title outcome-focused', dur: 'habit',
+        desc: 'Audit your gig titles regularly — outcomes, not skills.' },
+    ],
+  },
+  {
+    id: 'p4', num: '4', title: 'Growth path',
+    tagline: 'Once you have ratings and a track record, expand outward',
+    items: [
+      { id: 'p4a', title: 'Month 1 — three core gigs live', dur: 'month 1',
+        desc: 'Focus entirely on reviews and response speed.' },
+      { id: 'p4b', title: 'Months 2–3 — raise prices, reach Specialist', dur: 'months 2–3',
+        desc: 'Let reviews compound while you climb the pricing ladder.' },
+      { id: 'p4c', title: 'Month 3+ — higher-value branding packages', dur: 'month 3+',
+        desc: 'Logo + mascot + full social kit as one offer.' },
+      { id: 'p4d', title: 'Ongoing — premium TikTok Shop bundle', dur: 'ongoing',
+        desc: 'Mascot + product videos + motion graphics as one premium offer for TikTok Shop sellers.' },
+    ],
+  },
+];
+
+const GIGS = [
+  {
+    tag: 'Gig 1', title: 'I will design a custom anime-style mascot for your brand',
+    desc: 'A hand-drawn anime/manga-style character to give your brand a memorable face — from concept sketch to a clean, ready-to-use character sheet you can drop straight into packaging, social posts, or stickers.',
+    provides: ['Brand name & short personality brief (cute / cool / elegant, etc.)', 'Any reference images or characters you like', 'Color preferences, if you have them'],
+    tiers: [
+      { name: 'Basic', price: '฿900', del: '3-day delivery', feats: ['1 character concept', '1 finished color version', '2 revisions'] },
+      { name: 'Standard', price: '฿2,000', del: '4-day delivery', feats: ['1 character, 3 poses/expressions', 'Transparent PNG + source file', '3 revisions'] },
+      { name: 'Premium', price: '฿4,000', del: '6-day delivery', feats: ['Character + mini brand kit', 'Logo lockup + 3 social templates', '5 revisions'] },
+    ],
+  },
+  {
+    tag: 'Gig 2', title: 'I will draw a custom anime-style LINE sticker set',
+    desc: '8–16 original hand-drawn stickers built around your character or brand mascot — sized and formatted correctly for LINE Creators Market or for internal brand and chat use.',
+    provides: ['A character reference, or ask me to design from scratch', 'List of desired expressions / phrases (Thai and/or English)', 'Intended use: personal, brand, or Creators Market submission'],
+    tiers: [
+      { name: 'Basic', price: '฿1,500', del: '5-day delivery', feats: ['8 static stickers', '1 character', '2 revisions'] },
+      { name: 'Standard', price: '฿2,900', del: '7-day delivery', feats: ['16 static stickers', 'Multiple expressions/poses', '3 revisions'] },
+      { name: 'Premium', price: '฿4,800', del: '9-day delivery', feats: ['16 stickers, ready to submit', 'Main + tab image specs prepped', '3 revisions'] },
+    ],
+  },
+  {
+    tag: 'Gig 3', title: 'I will edit scroll-stopping TikTok Shop videos, AI-assisted',
+    desc: 'Fast-turnaround short-form edits (15–60s) that combine AI tools — auto-captions, b-roll, upscaling — with hands-on creative editing: hooks, pacing, and trending formats built for conversions.',
+    provides: ['Raw footage or product shots', 'Brand guidelines, if you have them', 'Target audience and the goal of the video (sales, awareness, etc.)'],
+    tiers: [
+      { name: 'Basic', price: '฿650', del: '2-day delivery', feats: ['1 video, up to 30s', 'Captions + basic cuts', '2 revisions'] },
+      { name: 'Standard', price: '฿1,500', del: '3-day delivery', feats: ['1 video, up to 60s', 'B-roll + trending audio + text', '3 revisions'] },
+      { name: 'Premium', price: '฿3,800', del: '5-day delivery', feats: ['3-video content pack', 'Consistent style, hook-optimized', '3 revisions each'] },
+    ],
+  },
+];
+
+/* ---------------- state ---------------- */
+const LS = {
+  state: 'fw_state_v1',
+  theme: 'fw_theme_v1',
+  token: 'fw_gh_token_v1',
+  gist: 'fw_gist_id_v1',
+  lastSync: 'fw_last_sync_v1',
+};
+const GIST_FILE = 'fastwork-progress.json';
+const GIST_DESC = 'Fastwork Launch Tracker — progress data (auto-managed)';
+
+const $ = (id) => document.getElementById(id);
+
+function lsGet(key, fallback) {
+  try { const v = localStorage.getItem(key); return v == null ? fallback : JSON.parse(v); }
+  catch (e) { return fallback; }
+}
+function lsSet(key, val) { localStorage.setItem(key, JSON.stringify(val)); }
+
+/* state shape: { v: 1, tasks: { [leafId]: { d: 0|1, ts: epoch-ms } } }
+   Versioned so an order/review log can be added later without breaking sync. */
+let state = lsGet(LS.state, { v: 1, tasks: {} });
+if (!state.tasks) state = { v: 1, tasks: {} };
+
+/* leaf ids = sub ids where a task has subs, else the task id */
+function leafIds() {
+  const out = [];
+  for (const ph of PLAN) for (const t of ph.items) {
+    if (t.subs) for (const [sid] of t.subs) out.push(sid);
+    else out.push(t.id);
+  }
+  return out;
+}
+const LEAVES = leafIds();
+
+const isDone = (id) => !!(state.tasks[id] && state.tasks[id].d);
+function setDone(id, d) {
+  state.tasks[id] = { d: d ? 1 : 0, ts: Date.now() };
+  lsSet(LS.state, state);
+  scheduleSync();
+}
+
+function phaseLeaves(ph) {
+  const out = [];
+  for (const t of ph.items) {
+    if (t.subs) for (const [sid] of t.subs) out.push(sid);
+    else out.push(t.id);
+  }
+  return out;
+}
+
+/* ---------------- toast ---------------- */
+let toastTimer = null;
+function toast(msg) {
+  const el = $('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2600);
+}
+
+/* ---------------- rendering ---------------- */
+const openPhases = new Set();
+let openInit = false;
+
+function esc(s) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function renderHero() {
+  const total = LEAVES.length;
+  const done = LEAVES.filter(isDone).length;
+  const pct = total ? Math.round((done / total) * 100) : 0;
+  $('ringPct').textContent = pct + '%';
+  $('ringSteps').textContent = done + ' / ' + total;
+  const C = 251.3;
+  $('ringFill').style.strokeDashoffset = String(C - (C * pct) / 100);
+  $('ringFill').style.stroke = pct === 100 ? 'var(--green)' : 'var(--accent)';
+
+  const next = nextStep();
+  const un = $('upNext');
+  if (next) {
+    un.innerHTML = '<span class="iconify" data-icon="solar:arrow-right-linear"></span><span>Up next: ' + esc(next) + '</span>';
+  } else {
+    un.innerHTML = '<span class="iconify" data-icon="solar:cup-star-linear"></span><span>Plan complete — you’re live and growing. 🎉</span>';
+  }
+}
+
+function nextStep() {
+  for (const ph of PLAN) for (const t of ph.items) {
+    if (t.subs) {
+      for (const [sid, label] of t.subs) if (!isDone(sid)) return t.title + ' → ' + label;
+    } else if (!isDone(t.id)) return t.title;
+  }
+  return null;
+}
+
+function renderPhases() {
+  if (!openInit) {
+    // default: open the first phase that isn't complete
+    const firstOpen = PLAN.find((ph) => phaseLeaves(ph).some((id) => !isDone(id)));
+    if (firstOpen) openPhases.add(firstOpen.id);
+    openInit = true;
+  }
+  const host = $('phases');
+  host.innerHTML = '';
+  for (const ph of PLAN) {
+    const leaves = phaseLeaves(ph);
+    const done = leaves.filter(isDone).length;
+    const pct = leaves.length ? Math.round((done / leaves.length) * 100) : 0;
+    const full = done === leaves.length;
+    const open = openPhases.has(ph.id);
+
+    const card = document.createElement('div');
+    card.className = 'card phase' + (open ? ' open' : '');
+
+    let inner =
+      '<button class="phase-head" data-ph="' + ph.id + '">' +
+        '<div class="phase-num' + (full ? ' done' : '') + '">' + (full ? '<span class="iconify" data-icon="solar:check-read-linear"></span>' : ph.num) + '</div>' +
+        '<div class="phase-meta"><h3>' + esc(ph.title) + '</h3><p>' + esc(ph.tagline) + '</p></div>' +
+        '<div class="phase-count">' + done + '/' + leaves.length + '</div>' +
+        '<span class="iconify phase-chev" data-icon="solar:alt-arrow-down-linear"></span>' +
+      '</button>' +
+      '<div class="phase-bar"><i class="' + (full ? 'full' : '') + '" style="width:' + pct + '%"></i></div>' +
+      '<div class="phase-body">';
+
+    if (ph.note) {
+      inner += '<div class="phase-note"><span class="iconify" data-icon="solar:lightbulb-linear"></span><span>' + esc(ph.note) + '</span></div>';
+    }
+
+    for (const t of ph.items) {
+      const subIds = t.subs ? t.subs.map((s) => s[0]) : null;
+      const tDone = subIds ? subIds.every(isDone) : isDone(t.id);
+      const tHalf = subIds ? !tDone && subIds.some(isDone) : false;
+
+      inner += '<div class="task' + (tDone ? ' done' : '') + '">' +
+        '<div class="task-row">' +
+          '<input type="checkbox" class="check' + (tHalf ? ' half' : '') + '" data-task="' + t.id + '"' + (tDone ? ' checked' : '') + '>' +
+          '<div class="task-main" data-taskmain="' + t.id + '">' +
+            '<div class="task-title">' + esc(t.title) + '<span class="chip' + (t.id === 'p0e' ? ' warn' : '') + '">' + esc(t.dur) + '</span></div>' +
+            '<div class="task-desc">' + esc(t.desc) + '</div>' +
+          '</div>' +
+        '</div>';
+
+      if (t.subs) {
+        inner += '<div class="subs">';
+        for (const [sid, label] of t.subs) {
+          const sd = isDone(sid);
+          inner += '<label class="sub' + (sd ? ' done' : '') + '">' +
+            '<input type="checkbox" class="check" data-leaf="' + sid + '"' + (sd ? ' checked' : '') + '>' +
+            '<span class="sub-label">' + esc(label) + '</span></label>';
+        }
+        inner += '</div>';
+      }
+      inner += '</div>';
+    }
+
+    inner += '</div>';
+    card.innerHTML = inner;
+    host.appendChild(card);
+  }
+}
+
+function renderGigs() {
+  const host = $('gigs');
+  host.innerHTML = '';
+  for (const g of GIGS) {
+    const card = document.createElement('div');
+    card.className = 'card card-pad';
+    let h = '<div class="gig-tag">' + esc(g.tag) + '</div>' +
+      '<div class="gig-title">' + esc(g.title) + '</div>' +
+      '<div class="gig-desc">' + esc(g.desc) + '</div>' +
+      '<div class="gig-sub">What the buyer provides</div><ul class="gig-list">';
+    for (const p of g.provides) {
+      h += '<li><span class="iconify" data-icon="solar:arrow-right-linear"></span>' + esc(p) + '</li>';
+    }
+    h += '</ul><div class="gig-sub">Tiers</div><div class="tiers">';
+    g.tiers.forEach((t, i) => {
+      h += '<div class="tier' + (i === 1 ? ' mid' : '') + '"><h5>' + esc(t.name.toUpperCase()) + '</h5>' +
+        '<div class="price">' + esc(t.price) + '</div><div class="del">' + esc(t.del) + '</div><ul>';
+      for (const f of t.feats) h += '<li>' + esc(f) + '</li>';
+      h += '</ul></div>';
+    });
+    h += '</div>';
+    card.innerHTML = h;
+    host.appendChild(card);
+  }
+}
+
+function renderAll() { renderHero(); renderPhases(); }
+
+/* ---------------- interactions ---------------- */
+$('phases').addEventListener('click', (e) => {
+  const head = e.target.closest('.phase-head');
+  if (head) {
+    const id = head.dataset.ph;
+    if (openPhases.has(id)) openPhases.delete(id); else openPhases.add(id);
+    renderPhases();
+    return;
+  }
+  const main = e.target.closest('[data-taskmain]');
+  if (main) {
+    // tapping the task text toggles like the checkbox
+    const cb = main.parentElement.querySelector('[data-task]');
+    if (cb) { cb.checked = !cb.checked; cb.dispatchEvent(new Event('change', { bubbles: true })); }
+  }
+});
+
+$('phases').addEventListener('change', (e) => {
+  const el = e.target;
+  if (el.dataset.leaf) {
+    setDone(el.dataset.leaf, el.checked);
+    checkPhaseComplete(el.dataset.leaf);
+    renderAll();
+  } else if (el.dataset.task) {
+    const task = findTask(el.dataset.task);
+    if (task && task.subs) {
+      for (const [sid] of task.subs) setDone(sid, el.checked);
+    } else {
+      setDone(el.dataset.task, el.checked);
+    }
+    checkPhaseComplete(el.dataset.task);
+    renderAll();
+  }
+});
+
+function findTask(id) {
+  for (const ph of PLAN) for (const t of ph.items) if (t.id === id) return t;
+  return null;
+}
+
+let celebrated = new Set(lsGet('fw_celebrated_v1', []));
+function checkPhaseComplete(changedId) {
+  for (const ph of PLAN) {
+    const leaves = phaseLeaves(ph);
+    if (!leaves.some((l) => l === changedId || (findTask(changedId) && changedId.startsWith(ph.id)))) continue;
+    if (leaves.every(isDone) && !celebrated.has(ph.id)) {
+      celebrated.add(ph.id);
+      lsSet('fw_celebrated_v1', [...celebrated]);
+      toast('Phase ' + ph.num + ' complete — ' + ph.title + ' 🎉');
+    }
+  }
+}
+
+/* ---------------- views ---------------- */
+document.querySelectorAll('.dock-btn').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.dock-btn').forEach((b) => b.classList.toggle('active', b === btn));
+    document.querySelectorAll('.view').forEach((v) => v.classList.remove('active'));
+    $('view-' + btn.dataset.view).classList.add('active');
+    window.scrollTo({ top: 0 });
+  });
+});
+
+/* ---------------- theme ---------------- */
+$('themeToggle').checked = localStorage.getItem(LS.theme) === '"light"' || localStorage.getItem(LS.theme) === 'light';
+$('themeToggle').addEventListener('change', (e) => {
+  const light = e.target.checked;
+  document.documentElement.setAttribute('data-theme', light ? 'light' : 'dark');
+  localStorage.setItem(LS.theme, light ? 'light' : 'dark');
+  document.querySelector('meta[name="theme-color"]').setAttribute('content', light ? '#f6f5f2' : '#14161d');
+});
+
+/* ---------------- GitHub Gist sync ----------------
+   Model: whole-state document in a private gist, merged per-leaf
+   by last-write-wins timestamps. Safe to run from any number of
+   devices; conflicts resolve to the most recent check/uncheck.  */
+const token = () => localStorage.getItem(LS.token) || '';
+const gistId = () => localStorage.getItem(LS.gist) || '';
+
+let syncing = false;
+let dirty = false;
+let syncTimer = null;
+
+function setSyncUI(mode, detail) {
+  const chip = $('syncChip'), txt = $('syncChipText');
+  const icon = chip.querySelector('.iconify');
+  chip.className = 'sync-chip';
+  const map = {
+    local:   ['solar:cloud-cross-linear', 'Local', ''],
+    offline: ['solar:cloud-cross-linear', 'Offline', ''],
+    busy:    ['solar:refresh-linear', 'Syncing', 'busy'],
+    ok:      ['solar:cloud-check-linear', 'Synced', 'ok'],
+    err:     ['solar:cloud-cross-linear', 'Sync error', 'err'],
+  };
+  const [ic, label, cls] = map[mode] || map.local;
+  icon.setAttribute('data-icon', ic);
+  txt.textContent = label;
+  if (cls) chip.classList.add(cls);
+
+  const line = $('syncStatusLine');
+  if (line) {
+    const last = localStorage.getItem(LS.lastSync);
+    let msg;
+    if (mode === 'local') msg = 'Not connected — progress stays on this device.';
+    else if (mode === 'busy') msg = 'Syncing…';
+    else if (mode === 'err') msg = 'Sync failed: ' + (detail || 'check token & connection');
+    else if (mode === 'offline') msg = 'Offline — will sync when back online.';
+    else msg = 'Synced' + (last ? ' · last: ' + new Date(+last).toLocaleString() : '');
+    line.textContent = msg;
+  }
+}
+
+async function ghApi(path, opts = {}) {
+  const res = await fetch('https://api.github.com' + path, {
+    ...opts,
+    headers: {
+      'Authorization': 'Bearer ' + token(),
+      'Accept': 'application/vnd.github+json',
+      ...(opts.body ? { 'Content-Type': 'application/json' } : {}),
+      ...opts.headers,
+    },
+  });
+  if (!res.ok) {
+    const t = await res.text().catch(() => '');
+    throw new Error(res.status + ' ' + (t.slice(0, 120) || res.statusText));
+  }
+  return res.status === 204 ? null : res.json();
+}
+
+function mergeStates(a, b) {
+  const out = { v: 1, tasks: {} };
+  const keys = new Set([...Object.keys(a.tasks || {}), ...Object.keys(b.tasks || {})]);
+  for (const k of keys) {
+    const av = (a.tasks || {})[k], bv = (b.tasks || {})[k];
+    if (!av) out.tasks[k] = bv;
+    else if (!bv) out.tasks[k] = av;
+    else out.tasks[k] = (av.ts || 0) >= (bv.ts || 0) ? av : bv;
+  }
+  return out;
+}
+
+async function findOrCreateGist() {
+  // discovery: look for our filename among the user's gists
+  const gists = await ghApi('/gists?per_page=100');
+  const hit = gists.find((g) => g.files && g.files[GIST_FILE]);
+  if (hit) { localStorage.setItem(LS.gist, hit.id); return hit.id; }
+  const created = await ghApi('/gists', {
+    method: 'POST',
+    body: JSON.stringify({
+      description: GIST_DESC,
+      public: false,
+      files: { [GIST_FILE]: { content: JSON.stringify(state) } },
+    }),
+  });
+  localStorage.setItem(LS.gist, created.id);
+  return created.id;
+}
+
+async function syncNow(showToast) {
+  if (!token()) { setSyncUI('local'); return; }
+  if (!navigator.onLine) { setSyncUI('offline'); return; }
+  if (syncing) { dirty = true; return; }
+  syncing = true;
+  setSyncUI('busy');
+  try {
+    let id = gistId();
+    if (!id) id = await findOrCreateGist();
+
+    let g;
+    try {
+      g = await ghApi('/gists/' + id);
+    } catch (e) {
+      // gist was deleted remotely — recover by re-discovering/creating
+      if (String(e.message).startsWith('404')) {
+        localStorage.removeItem(LS.gist);
+        id = await findOrCreateGist();
+        g = await ghApi('/gists/' + id);
+      } else throw e;
+    }
+
+    let remote = { v: 1, tasks: {} };
+    const f = g.files && g.files[GIST_FILE];
+    if (f && f.content) {
+      try { remote = JSON.parse(f.content); } catch (e) {}
+      if (f.truncated) remote = await fetch(f.raw_url).then((r) => r.json());
+    }
+
+    const merged = mergeStates(state, remote);
+    const mergedStr = JSON.stringify(merged);
+    const remoteStr = JSON.stringify(remote);
+
+    state = merged;
+    lsSet(LS.state, state);
+
+    if (mergedStr !== remoteStr) {
+      await ghApi('/gists/' + id, {
+        method: 'PATCH',
+        body: JSON.stringify({ files: { [GIST_FILE]: { content: mergedStr } } }),
+      });
+    }
+
+    localStorage.setItem(LS.lastSync, String(Date.now()));
+    dirty = false;
+    setSyncUI('ok');
+    renderAll();
+    if (showToast) toast('Synced ✓');
+  } catch (e) {
+    setSyncUI('err', e.message);
+    if (showToast) toast('Sync failed — ' + e.message.slice(0, 60));
+  } finally {
+    syncing = false;
+    if (dirty) scheduleSync();
+  }
+}
+
+function scheduleSync() {
+  if (!token()) return;
+  dirty = true;
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(() => syncNow(false), 2500);
+}
+
+/* sync triggers */
+window.addEventListener('online', () => syncNow(false));
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && token()) {
+    const last = +(localStorage.getItem(LS.lastSync) || 0);
+    if (Date.now() - last > 30000) syncNow(false);
+  }
+});
+
+/* settings wiring */
+$('tokenInput').value = token();
+$('btnSaveToken').addEventListener('click', () => {
+  const t = $('tokenInput').value.trim();
+  if (!t) { toast('Paste a token first'); return; }
+  localStorage.setItem(LS.token, t);
+  toast('Token saved — syncing…');
+  syncNow(true);
+});
+$('btnSyncNow').addEventListener('click', () => {
+  if (!token()) { toast('Add a token first'); return; }
+  syncNow(true);
+});
+$('btnClearToken').addEventListener('click', () => {
+  localStorage.removeItem(LS.token);
+  localStorage.removeItem(LS.gist);
+  $('tokenInput').value = '';
+  setSyncUI('local');
+  toast('Disconnected — data stays on this device');
+});
+
+/* ---------------- backup / restore ---------------- */
+$('btnExport').addEventListener('click', () => {
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'fastwork-progress-' + new Date().toISOString().slice(0, 10) + '.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+$('btnImport').addEventListener('click', () => $('importFile').click());
+$('importFile').addEventListener('change', async () => {
+  const file = $('importFile').files[0];
+  if (!file) return;
+  try {
+    const imported = JSON.parse(await file.text());
+    if (!imported || typeof imported.tasks !== 'object') throw new Error('bad format');
+    state = mergeStates(state, imported);
+    lsSet(LS.state, state);
+    renderAll();
+    scheduleSync();
+    toast('Backup merged ✓');
+  } catch (e) {
+    toast('Import failed — not a valid backup');
+  }
+  $('importFile').value = '';
+});
+$('btnReset').addEventListener('click', () => {
+  if (!confirm('Reset all progress? This unchecks every step — and syncs the reset to your other devices.')) return;
+  const ts = Date.now();
+  // explicit unchecks (not deletion) so the reset wins the merge on other devices
+  for (const id of LEAVES) state.tasks[id] = { d: 0, ts };
+  lsSet(LS.state, state);
+  celebrated = new Set();
+  lsSet('fw_celebrated_v1', []);
+  renderAll();
+  scheduleSync();
+  toast('Progress reset');
+});
+
+/* ---------------- init ---------------- */
+(function init() {
+  renderAll();
+  renderGigs();
+  if (token()) syncNow(false); else setSyncUI('local');
+
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  }
+})();
+</script>
+</body>
+</html>
