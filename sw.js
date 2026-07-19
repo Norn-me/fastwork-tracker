@@ -5,7 +5,7 @@
 
 /* Bump this version whenever index.html (or any shell asset) changes —
    it triggers a fresh install and drops the old cache on activate. */
-const CACHE = 'fastwork-tracker-v3';
+const CACHE = 'fastwork-tracker-v4';
 
 const SHELL = [
   './',
